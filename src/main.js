@@ -84,14 +84,23 @@ function createDraggableCircle(scene, x, y) {
 function showCircleDataSelection(scene, circle) {
     if (!apiData || apiData.length === 0) return;
 
+
     const existing = document.getElementById('dataSelect');
     if (existing) existing.remove();
+
+    // แปลงตำแหน่ง circle (Phaser) เป็นตำแหน่งบนจอ (canvas)
+    const canvas = scene.sys.game.canvas;
+    const rect = canvas.getBoundingClientRect();
+    // ใช้ circle.x, circle.y เป็นตำแหน่งใน scene
+    // ต้องบวก offset ของ canvas บนจอด้วย
+    const left = rect.left + circle.x - 40; // -40 เพื่อให้ select อยู่ข้าง ๆ
+    const top = rect.top + circle.y - 20; // -20 เพื่อให้ select อยู่ตรงกลางแนวตั้ง
 
     const select = document.createElement('select');
     select.id = 'dataSelect';
     select.style.position = 'absolute';
-    select.style.left = '10px';
-    select.style.top = '50px';
+    select.style.left = `${left}px`;
+    select.style.top = `${top}px`;
     select.style.zIndex = 1000;
 
     apiData.forEach((item, i) => {

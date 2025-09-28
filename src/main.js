@@ -1,0 +1,141 @@
+const config = {
+    type: Phaser.AUTO,
+    parent: "game-container",
+    title: "5S Dashboard",
+    version: "1.0.0",
+    autoFocus: true,
+    disableContextMenu: true,
+    scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
+    audio: { noAudio: true },
+    backgroundColor: 0xffffff,
+    antialias: false,
+    pixelArt: true,
+    roundPixels: true,
+    transparent: true,
+    scene: { preload, create, update }
+};
+
+const game = new Phaser.Game(config);
+
+let graphics;
+let tooltipText;
+let apiData = [];
+
+function preload() {
+}
+
+async function create() {
+    graphics = this.add.graphics();
+
+    drawGrid(this.scale.width, this.scale.height);
+    this.scale.on('resize', (gameSize) => drawGrid(gameSize.width, gameSize.height));
+
+    tooltipText = this.add.text(0, 0, '', { font: "14px Arial", fill: "#000", backgroundColor: "#fff" });
+    tooltipText.setDepth(1000);
+    tooltipText.setVisible(false);
+
+    apiData = await fetch5SData();
+
+    for (let i = 1; i <= 7; i++) {
+        createDraggableCircle(this, 64 * i, 64);
+    }
+}
+
+function update() { }
+
+function drawGrid(width, height) {
+    graphics.clear();
+    graphics.lineStyle(1, 0x000000, 0.3);
+    for (let x = 0; x < width; x += 64) graphics.moveTo(x, 0), graphics.lineTo(x, height);
+    for (let y = 0; y < height; y += 64) graphics.moveTo(0, y), graphics.lineTo(width, y);
+    graphics.strokePath();
+}
+
+function createDraggableCircle(scene, x, y) {
+    let color = 0xaaaaaa;
+
+    const circle = scene.add.circle(x + 32, y + 32, 28, color);
+    circle.setInteractive({ draggable: true });
+    scene.input.setDraggable(circle);
+
+    circle.selectedItem = null;
+
+    circle.on('drag', (pointer, dragX, dragY) => {
+        circle.x = Phaser.Math.Snap.To(dragX, 64) + 32;
+        circle.y = Phaser.Math.Snap.To(dragY, 64) + 32;
+    });
+
+    circle.on('pointerover', () => {
+        if (circle.selectedItem) {
+            tooltipText.setText(`${circle.selectedItem[0]}\n${circle.selectedItem[1]}\n${circle.selectedItem[2]}`);
+        } else {
+            tooltipText.setText("Click for select data");
+        }
+        tooltipText.setVisible(true);
+    });
+    circle.on('pointerout', () => tooltipText.setVisible(false));
+    circle.on('pointermove', (pointer) => tooltipText.setPosition(pointer.x + 10, pointer.y + 10));
+
+    circle.on('pointerdown', () => showCircleDataSelection(scene, circle));
+
+    return circle;
+}
+
+function showCircleDataSelection(scene, circle) {
+    if (!apiData || apiData.length === 0) return;
+
+    const existing = document.getElementById('dataSelect');
+    if (existing) existing.remove();
+
+    const select = document.createElement('select');
+    select.id = 'dataSelect';
+    select.style.position = 'absolute';
+    select.style.left = '10px';
+    select.style.top = '50px';
+    select.style.zIndex = 1000;
+
+    apiData.forEach((item, i) => {
+        const option = document.createElement('option');
+        option.value = i;
+        option.text = `${item[0]} - ${item[1]} - ${item[2]}`;
+        select.appendChild(option);
+    });
+
+    select.addEventListener('change', (e) => {
+        const index = parseInt(e.target.value);
+        const item = apiData[index];
+
+        // เปลี่ยนสีตามสถานะ 5S
+        let color = 0xaaaaaa;
+        switch (item[2]) {
+            case "5S": color = 0x00ff00; break;    // สีเขียว
+            case "4S": color = 0x99ff66; break;    // สีเขียวอ่อน
+            case "3S": color = 0xffff00; break;    // สีเหลือง
+            case "2S": color = 0xff9900; break;    // สีส้ม
+            case "1S": color = 0xff0000; break;    // สีแดง
+            case "0N": color = 0x000000; break;    // สีดำ
+        }
+        circle.fillColor = color;
+
+        circle.selectedItem = item;
+
+        tooltipText.setText(`${item[0]}\n${item[1]}\n${item[2]}`);
+
+        select.remove();
+    });
+
+    document.body.appendChild(select);
+}
+
+async function fetch5SData() {
+    const url = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLi7xd-OAAmZ8AescjJL34a8FCTvhUUU9SkhzWKZrqoH8lkKJgP0nSmeO9uJKgaVgznwq8smArQemYEWgNSbnRoJZ3XSVmB4evh-Gnp1Fm1RxnVjk1jlGct9ATAqO_-x-p1Z43TfJgIIWQu0A2Fbxz8ZTIRzQRvCd2CoiqAsAbQ00hz6-NAOhTjrEJOUdsemb41OJe-QD8M7udfihqf9_eSwCWGJXN8UqSjKf7jXLwVPDr7iQ1vlCAbzOaYkGiVuLS2asvY8MWtONgLUI1ebQH173U5hKJjFkpiEMBEi&lib=M-g_o_A83U2A5xS2kBj8I5jgMzyICubym";
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Response status: ${response.status}`);
+        const result = await response.json();
+        return result.data;
+    } catch (err) {
+        console.error(err);
+        return [];
+    }
+}

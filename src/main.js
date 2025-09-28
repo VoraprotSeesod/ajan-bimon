@@ -76,7 +76,11 @@ function createDraggableCircle(scene, x, y) {
     circle.on('pointerout', () => tooltipText.setVisible(false));
     circle.on('pointermove', (pointer) => tooltipText.setPosition(pointer.x + 10, pointer.y + 10));
 
-    circle.on('pointerdown', () => showCircleDataSelection(scene, circle));
+        circle.on('pointerdown', (pointer) => {
+            if (pointer.rightButtonDown()) {
+                showCircleDataSelection(scene, circle);
+            }
+        });
 
     return circle;
 }

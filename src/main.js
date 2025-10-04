@@ -34,6 +34,24 @@ async function create() {
     tooltipText.setDepth(1000);
     tooltipText.setVisible(false);
 
+    // เพิ่ม zoom controls
+    this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
+        // ตรวจสอบว่ากด Ctrl อยู่หรือไม่
+        if (pointer.event.ctrlKey) {
+            // ป้องกันการ zoom ของ browser
+            pointer.event.preventDefault();
+            
+            // deltaY < 0 คือลูกกลิ้งขึ้น (zoom in), > 0 คือลูกกลิ้งลง (zoom out)
+            const zoomAmount = deltaY < 0 ? 0.1 : -0.1;
+            const newZoom = this.cameras.main.zoom + zoomAmount;
+            
+            // จำกัด zoom ไม่ให้เล็กหรือใหญ่เกินไป
+            if (newZoom >= 0.5 && newZoom <= 2) {
+                this.cameras.main.zoom = newZoom;
+            }
+        }
+    });
+
     apiData = await fetch5SData();
 
     for (let i = 1; i <= 7; i++) {
@@ -61,8 +79,15 @@ function createDraggableCircle(scene, x, y) {
     circle.selectedItem = null;
 
     circle.on('drag', (pointer, dragX, dragY) => {
-        circle.x = Phaser.Math.Snap.To(dragX, 64) + 32;
-        circle.y = Phaser.Math.Snap.To(dragY, 64) + 32;
+        if (pointer.event.ctrlKey) {
+            // ถ้ากด Ctrl ให้ snap to grid
+            circle.x = Phaser.Math.Snap.To(dragX, 64) + 32;
+            circle.y = Phaser.Math.Snap.To(dragY, 64) + 32;
+        } else {
+            // ถ้าไม่ได้กด Ctrl สามารถลากวางที่ไหนก็ได้
+            circle.x = dragX;
+            circle.y = dragY;
+        }
     });
 
     circle.on('pointerover', () => {

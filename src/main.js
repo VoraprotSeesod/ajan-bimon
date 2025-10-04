@@ -36,8 +36,8 @@ async function create() {
 
     // เพิ่ม zoom controls
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY, deltaZ) => {
-        // ตรวจสอบว่ากด Ctrl อยู่หรือไม่
-        if (pointer.event.ctrlKey) {
+        // ตรวจสอบว่ากด Ctrl (Windows/Linux) หรือ Command (Mac) อยู่หรือไม่
+        if (pointer.event.ctrlKey || pointer.event.metaKey) {
             // ป้องกันการ zoom ของ browser
             pointer.event.preventDefault();
             
@@ -69,32 +69,49 @@ function drawGrid(width, height) {
     graphics.strokePath();
 }
 
+// ตัวแปร global สำหรับเก็บค่า depth ล่าสุด
+let currentMaxDepth = 1;
+
 function createDraggableCircle(scene, x, y) {
     let color = 0xaaaaaa;
 
     const circle = scene.add.circle(x + 32, y + 32, 28, color);
     circle.setInteractive({ draggable: true });
     scene.input.setDraggable(circle);
+    // ตั้ง depth เริ่มต้น
+    circle.setDepth(currentMaxDepth++);
 
     circle.selectedItem = null;
 
     circle.on('drag', (pointer, dragX, dragY) => {
-        if (pointer.event.ctrlKey) {
-            // ถ้ากด Ctrl ให้ snap to grid
+        if (pointer.event.ctrlKey || pointer.event.metaKey) {
+            // ถ้ากด Ctrl (Windows/Linux) หรือ Command (Mac) ให้ snap to grid
             circle.x = Phaser.Math.Snap.To(dragX, 64) + 32;
             circle.y = Phaser.Math.Snap.To(dragY, 64) + 32;
         } else {
-            // ถ้าไม่ได้กด Ctrl สามารถลากวางที่ไหนก็ได้
+            // ถ้าไม่ได้กดปุ่มพิเศษ สามารถลากวางที่ไหนก็ได้
             circle.x = dragX;
             circle.y = dragY;
         }
+        
+        // อัพเดตตำแหน่ง select ถ้ามีการแสดงอยู่
+        const select = document.getElementById('dataSelect');
+        if (select) {
+            updateSelectPosition(select, scene, circle);
+        }
+    });
+
+    // เมื่อเริ่มลาก
+    circle.on('dragstart', () => {
+        // นำวัตถุขึ้นมาชั้นบนสุดตั้งแต่เริ่มลาก
+        circle.setDepth(currentMaxDepth++);
     });
 
     circle.on('pointerover', () => {
         if (circle.selectedItem) {
             tooltipText.setText(`${circle.selectedItem[0]}\n${circle.selectedItem[1]}\n${circle.selectedItem[2]}`);
         } else {
-            tooltipText.setText("Click for select data");
+            tooltipText.setText("Right-click for select and cancel data");
         }
         tooltipText.setVisible(true);
     });
@@ -114,33 +131,42 @@ function showCircleDataSelection(scene, circle) {
     if (!apiData || apiData.length === 0) return;
 
     // ป้องกันซ้อน
-    const existing = document.getElementById('dataSelect');
-    if (existing) existing.remove();
+    let select = document.getElementById('dataSelect');
+    if (select) {
+        // ถ้ามี select อยู่แล้ว ให้อัพเดตตำแหน่งแทนการสร้างใหม่
+        updateSelectPosition(select, scene, circle);
+        return;
+    }
 
-    // แปลงตำแหน่ง circle (Phaser) เป็นตำแหน่งบนจอ (canvas)
-    const canvas = scene.sys.game.canvas;
-    const rect = canvas.getBoundingClientRect();
-    const left = rect.left + circle.x - 40;
-    const top = rect.top + circle.y - 20;
-
-    const select = document.createElement('select');
+    // สร้าง select ใหม่
+    select = document.createElement('select');
     select.id = 'dataSelect';
     select.style.position = 'absolute';
-    select.style.left = `${left}px`;
-    select.style.top = `${top}px`;
     select.style.zIndex = 1000;
+    
+    // ตั้งตำแหน่งเริ่มต้น
+    updateSelectPosition(select, scene, circle);
+    
+    // เคลียร์ตัวเลือกเดิม (ถ้ามี)
+    select.innerHTML = '';
 
+    // เพิ่มตัวเลือก "Select data" เป็นตัวแรก
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.text = 'Select data...';
+    select.appendChild(defaultOption);
+
+    // เพิ่มตัวเลือกจากข้อมูล
     apiData.forEach((item, i) => {
         const option = document.createElement('option');
         option.value = i;
         option.text = `${item[0]} - ${item[1]} - ${item[2]}`;
         select.appendChild(option);
-    });
-        // เลือก index 0 ทันที เพื่อให้เลือกอันแรกได้
-        select.selectedIndex = 0;
-
-    // เมื่อเลือกข้อมูล
+    });    // เมื่อเลือกข้อมูล
     select.addEventListener('change', (e) => {
+        // ถ้าเลือก default option (ค่าว่าง) ให้ข้าม
+        if (e.target.value === '') return;
+
         const index = parseInt(e.target.value);
         const item = apiData[index];
         let color = 0xaaaaaa;
@@ -165,6 +191,16 @@ function showCircleDataSelection(scene, circle) {
 
     document.body.appendChild(select);
     select.focus();
+}
+
+// ฟังก์ชันสำหรับอัพเดตตำแหน่ง select ให้อยู่ข้าง circle
+function updateSelectPosition(select, scene, circle) {
+    const canvas = scene.sys.game.canvas;
+    const rect = canvas.getBoundingClientRect();
+    const left = rect.left + circle.x - 40;  // -40 เพื่อให้อยู่ข้าง circle
+    const top = rect.top + circle.y - 20;    // -20 เพื่อให้อยู่กึ่งกลางแนวตั้ง
+    select.style.left = `${left}px`;
+    select.style.top = `${top}px`;
 }
 
 async function fetch5SData() {
